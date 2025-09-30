@@ -1,9 +1,17 @@
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using vsbd_core;
+using vsbd.Attributes;
+using vsbd.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
+
+app.MapPost("/start" , (RoslynCompileRequest req) =>
+{
+    
+}
 
 app.MapPost("/compile" ,(RoslynCompileRequest req) =>
 {
@@ -109,13 +117,44 @@ app.MapGet("/types", (string dllPath) =>
 
     try
     {
+        List<NodeDto> nodes = new List<NodeDto>();
+        
         var types = asm.GetExportedTypes()
             .Where(t => t.IsClass && !t.IsAbstract)
-            .Select(t => t.FullName)
             .OrderBy(n => n)
             .ToArray();
 
-        return TypedResults.Ok(types);
+        foreach (var type in types)
+        {
+            var node = new NodeDto();
+            node.Name = type.FullName ?? "No Name";
+            
+            var outputs = type.GetCustomAttribute(typeof(NodeOutput));
+            
+            if (outputs != null)
+            {
+                var t = outputs.GetType();
+                var prop = t.GetProperty("Outputs");
+                var val = prop.GetValue(outputs) as Type[];
+
+                node.Outputs = val.Select(x => x.FullName).ToArray();
+            }
+            
+            var inputs = type.GetCustomAttribute(typeof(NodeInput));
+            
+            if (inputs != null)
+            {
+                var t = inputs.GetType();
+                var prop = t.GetProperty("Inputs");
+                var val = prop.GetValue(inputs) as Type[];
+
+                node.Inputs = val.Select(x => x.FullName).ToArray();
+            }
+            
+            nodes.Add(node);
+        }
+
+        return TypedResults.Ok(nodes);
     }
     catch (ReflectionTypeLoadException ex)
     {
