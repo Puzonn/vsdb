@@ -1,7 +1,9 @@
 using vsbd_core;
 using System;
 
-public class A : NodeBase
+[NodeInput(new Type[] { typeof(int), typeof(int) })]
+[NodeOutput(new Type[] { typeof(string) })]
+public class TestNode : NodeBase
 {
     public override int Invoke()
     {

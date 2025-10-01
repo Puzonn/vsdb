@@ -13,5 +13,10 @@
     <ItemGroup>
       <ProjectReference Include="..\vsbd-core\vsbd-core.csproj" />
     </ItemGroup>
-
+<ItemGroup>
+  <None Update="Libraries/vsbd-core.dll">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+  </None>
+</ItemGroup>
 </Project>

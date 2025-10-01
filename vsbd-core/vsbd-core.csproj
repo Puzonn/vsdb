@@ -5,6 +5,10 @@
         <RootNamespace>vsbd_core</RootNamespace>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-    </PropertyGroup>
+     </PropertyGroup>
+
+    <Target Name="PostBuildCopy" AfterTargets="Build">
+       <Exec Command="sh $(MSBuildProjectDirectory)/post-build.sh" />
+    </Target>
 
 </Project>
