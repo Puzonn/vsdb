@@ -7,6 +7,10 @@
         <Nullable>enable</Nullable>
      </PropertyGroup>
 
+    <ItemGroup>
+      <PackageReference Include="NetCord" Version="1.0.0-alpha.429" />
+    </ItemGroup>
+
     <Target Name="PostBuildCopy" AfterTargets="Build">
        <Exec Command="sh $(MSBuildProjectDirectory)/post-build.sh" />
     </Target>

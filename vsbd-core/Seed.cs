@@ -1,0 +1,1 @@
+public sealed record Seed(int NodeId, Dictionary<string, object> Inputs);

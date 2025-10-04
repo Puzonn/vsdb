@@ -2,7 +2,8 @@
 {
     public abstract class NodeBase
     {
-        public abstract int Invoke();
+        public abstract ValueTask Execute(NodeContext context);
+        public virtual void OnNodeCreate(NodeContext context){}
     }
 }
 

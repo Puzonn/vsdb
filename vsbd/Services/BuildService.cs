@@ -5,10 +5,14 @@ using vsbd_core;
 
 public class BuildService
 {
+    private List<Node> _nodes = [];
+
     const string AssemblyName = "vsbd-nodes";
 
     public async Task<BuildResult> Compile()
     {
+        _nodes = [];
+
         var baseDir = AppContext.BaseDirectory;
         var outDir = Path.Combine(baseDir, "Libraries");
         Directory.CreateDirectory(outDir);
@@ -80,6 +84,11 @@ public class BuildService
 
     public async Task<NodeResult> GetNodes()
     {
+        if (_nodes.Count > 0)
+        {
+            return new NodeResult(true, null, _nodes.ToArray());
+        }
+
         var full = Path.Combine(AppContext.BaseDirectory, "Libraries", $"{AssemblyName}.dll");
         if (!File.Exists(full))
             return new NodeResult(false, "dll not found");
@@ -104,28 +113,27 @@ public class BuildService
         {
             var nodes = new List<Node>();
 
-            var inputAttrType = typeof(NodeInputAttribute);
-            var outputAttrType = typeof(NodeOutputAttribute);
-
             foreach (var type in asm.GetExportedTypes().Where(t => t.IsClass && !t.IsAbstract))
             {
-                var inputAttrs = type.GetCustomAttributes(inputAttrType, inherit: false)
+                var inputAttrs = type.GetCustomAttributes(typeof(NodeInputAttribute), inherit: false)
                                      .Cast<NodeInputAttribute>()
                                      .ToArray();
 
-                var inputs = inputAttrs
-                    .SelectMany(a => a.Inputs)
-                    .Select(x => x.FullName)
-                    .ToArray();
+                var inputs = inputAttrs.Select(x => new NodeInput()
+                {
+                    Name = x.Name,
+                    Type = x.Type.FullName!,
+                }).ToArray();
 
-                var outputAttrs = type.GetCustomAttributes(outputAttrType, inherit: false)
+                var outputAttrs = type.GetCustomAttributes(typeof(NodeOutputAttribute), inherit: false)
                                       .Cast<NodeOutputAttribute>()
                                       .ToArray();
 
-                var outputs = outputAttrs
-                    .SelectMany(a => a.Outputs)
-                    .Select(x => x.FullName)
-                    .ToArray();
+                var outputs = outputAttrs.Select(x => new NodeOutput()
+                {
+                    Name = x.Name,
+                    Type = x.Type.FullName!,
+                }).ToArray();
 
                 nodes.Add(new Node(type.FullName!)
                 {
@@ -134,6 +142,7 @@ public class BuildService
                 });
             }
 
+            _nodes = nodes;
 
             return new NodeResult(true, null, nodes.ToArray());
         }
@@ -142,5 +151,45 @@ public class BuildService
             var errors = ex.LoaderExceptions.Select(e => e.Message).ToArray();
             return new NodeResult(false, string.Join("\n", errors));
         }
+    }
+
+    public NodeBase? GetCompiledNode(string name, int id, ILogger logger)
+    {
+        var full = Path.Combine(AppContext.BaseDirectory, "Libraries", $"{AssemblyName}.dll");
+
+        var pluginDir = Path.GetDirectoryName(full)!;
+        var coreAsm = typeof(vsbd_core.NodeBase).Assembly;
+        var coreName = coreAsm.GetName().Name;
+
+        var alc = new System.Runtime.Loader.AssemblyLoadContext(AssemblyName, isCollectible: true);
+        alc.Resolving += (ctx, name) =>
+        {
+            if (string.Equals(name.Name, coreName, StringComparison.OrdinalIgnoreCase))
+                return coreAsm;
+
+            var candidate = Path.Combine(pluginDir, $"{name.Name}.dll");
+            return File.Exists(candidate) ? ctx.LoadFromAssemblyPath(candidate) : null;
+        };
+
+        var asm = alc.LoadFromAssemblyPath(full);
+
+        var exportedTypes = asm.GetExportedTypes().Where(t => t.IsClass && !t.IsAbstract);
+        var type = exportedTypes.Where(x => x.FullName == name).FirstOrDefault();
+
+        if (type == null)
+        {
+            return null;
+        }
+
+        var instance = Activator.CreateInstance(type) as NodeBase;
+        INodeLogger nodeLogger = new NodeLogger(logger);
+
+        instance!.OnNodeCreate(new NodeContext()
+        {
+            Logger = nodeLogger,
+            NodeId = id,
+        });
+
+        return instance;
     }
 }

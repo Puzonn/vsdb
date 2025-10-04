@@ -5,18 +5,26 @@ using Microsoft.AspNetCore.Mvc;
 public class BuildController : ControllerBase
 {
     private readonly BuildService _buildService;
+    private readonly ILogger<BuildController> _logger;
 
-    public BuildController(BuildService buildService)
+    public BuildController(BuildService buildService, ILogger<BuildController> logger)
     {
         _buildService = buildService;
+        _logger = logger;
     }
 
     [HttpPost("/compile")]
-    public async Task<BuildResult> Compile()
+    public async Task<ActionResult<BuildResult>> Compile()
     {
-        return await _buildService.Compile();
+        var result = await _buildService.Compile();
+
+        if (!result.Success)
+        {
+            return Problem(result.Error);
+        }
+        return Ok();
     }
-    
+
     [HttpGet("/nodes")]
     public async Task<ActionResult<NodeResult>> GetNodes()
     {

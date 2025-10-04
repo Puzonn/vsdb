@@ -1,7 +1,3 @@
-using System.Reflection;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
@@ -13,14 +9,23 @@ builder.Services.AddCors(options =>
                           policy.WithOrigins("http://localhost:1420");
                           policy.AllowAnyHeader();
                           policy.AllowAnyMethod();
+                          policy.AllowCredentials();
                       });
 });
 
+builder.Services.AddLogging();
 builder.Services.AddScoped<BuildService>();
+builder.Services.AddScoped<FlowRunnerService>();
+builder.Services.AddSingleton<IFlowJobManager, FlowJobManager>();
+
+builder.Services.AddSignalR();
 
 var app = builder.Build();
 
 app.UseCors("cors");
+
+app.MapHub<FlowHub>("/flow");
+
 app.MapControllers();
 
 
