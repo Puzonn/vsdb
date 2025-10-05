@@ -15,6 +15,6 @@ public class FlowHub : Hub
         return Task.FromResult(ok);
     }
 
-    public Task<bool> StopFlow()
-       => _jobManager.StopClient(Context.ConnectionId);
+    public Task<bool> StopFlow() => _jobManager.StopClient(Context.ConnectionId);
+
 }

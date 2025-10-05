@@ -1,35 +1,33 @@
 import { Handle, Position } from "@xyflow/react";
+import { INode } from "../types";
 
 function portY(i: number, n: number) {
   return ((i + 1) / (n + 1)) * 100;
 }
 
-// crude monospace-ish width estimate for text-xs (~12px font)
 function estimatePxForLabel(label: string) {
-  const avgPxPerChar = 7; // tweak if your font looks tighter/looser
+  const avgPxPerChar = 7;
   return Math.ceil(label.length * avgPxPerChar);
 }
 
-type Props = {
-  data: {
-    id: number | string;
-    label?: string;
-    inputs: { name: string }[];
-    outputs: { name: string }[];
-  };
+type Data = {
+  node: INode;
+  nodeClicked: (node: INode) => void;
 };
 
-export default function Node({ data }: Props) {
+export default function Node({ data }: {data: Data}) {
+  const { node, nodeClicked } = data;
+  
   const minNodeW = 220;
   const maxNodeW = 520;
   const sidePad = 24;
   const handleGap = 18;
 
-  const longestLeft = data.inputs.reduce(
+  const longestLeft = node.inputs.reduce(
     (m, x) => Math.max(m, estimatePxForLabel(x.name)),
     0
   );
-  const longestRight = data.outputs.reduce(
+  const longestRight = node.outputs.reduce(
     (m, x) => Math.max(m, estimatePxForLabel(x.name)),
     0
   );
@@ -40,26 +38,27 @@ export default function Node({ data }: Props) {
   const neededW = Math.max(minNodeW, leftNeeded + rightNeeded);
   const nodeW = Math.min(neededW, maxNodeW);
 
-  const rows = Math.max(data.inputs.length, data.outputs.length);
+  const rows = Math.max(node.inputs.length, node.outputs.length);
   const bodyH = Math.max(96, rows * 28);
 
   return (
     <div
+      onClick={() => nodeClicked(node)}
       className="relative rounded-2xl bg-[#2a2a2a] text-white border border-[#3a3a3a] shadow-sm"
       style={{ width: nodeW }}
     >
       <div className="flex flex-col items-center justify-center px-3 py-2 border-b border-[#3a3a3a] bg-[#1f1f1f] rounded-t-2xl">
         <span className="text-sm font-semibold tracking-wide">
-          {data.label ?? "Untitled"}
+          {node.name ?? "Untitled"}
         </span>
-        <span className="text-[11px] text-gray-400">ID: {Number(data.id)}</span>
+        <span className="text-[11px] text-gray-400">ID: {node.id}</span>
       </div>
 
       <div className="relative" style={{ height: bodyH }}>
         <div className="absolute inset-y-3 left-1/2 w-px bg-white/10 pointer-events-none" />
 
-        {data.inputs.map((inp, i) => {
-          const top = `${portY(i, data.inputs.length)}%`;
+        {node.inputs.map((inp, i) => {
+          const top = `${portY(i, node.inputs.length)}%`;
           return (
             <div key={`in-${inp.name}-${i}`}>
               <Handle
@@ -89,8 +88,8 @@ export default function Node({ data }: Props) {
           );
         })}
 
-        {data.outputs.map((out, i) => {
-          const top = `${portY(i, data.outputs.length)}%`;
+        {node.outputs.map((out, i) => {
+          const top = `${portY(i, node.outputs.length)}%`;
           return (
             <div key={`out-${out.name}-${i}`}>
               <Handle

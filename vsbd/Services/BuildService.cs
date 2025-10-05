@@ -119,26 +119,33 @@ public class BuildService
                                      .Cast<NodeInputAttribute>()
                                      .ToArray();
 
-                var inputs = inputAttrs.Select(x => new NodeInput()
-                {
-                    Name = x.Name,
-                    Type = x.Type.FullName!,
-                }).ToArray();
+                var inputs = inputAttrs.Select(x => new NodeInput(x.Type.FullName!, x.Name)).ToArray();
 
                 var outputAttrs = type.GetCustomAttributes(typeof(NodeOutputAttribute), inherit: false)
                                       .Cast<NodeOutputAttribute>()
                                       .ToArray();
 
-                var outputs = outputAttrs.Select(x => new NodeOutput()
+                var outputs = outputAttrs.Select(x => new NodeOutput(x.Type.FullName!, x.Name)).ToArray();
+
+                var props = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+                var exportedProps = new List<NodeProperty>();
+                foreach (var prop in props)
                 {
-                    Name = x.Name,
-                    Type = x.Type.FullName!,
-                }).ToArray();
+                    var propAttr = prop.GetCustomAttribute<NodePropertyAttribute>();
+                    if (propAttr != null)
+                    {
+                        exportedProps.Add(new NodeProperty(prop.PropertyType.FullName ?? "?",
+                            prop.Name,
+                            propAttr.DefaultValue.ToString()));
+                    }
+                }
 
                 nodes.Add(new Node(type.FullName!)
                 {
                     Inputs = inputs,
-                    Outputs = outputs
+                    Outputs = outputs,
+                    Properties = exportedProps.ToArray(),
                 });
             }
 

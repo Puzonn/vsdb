@@ -1,11 +1,9 @@
-import React, {
+import {
   forwardRef,
   useCallback,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
-  useState,
 } from "react";
 import {
   addEdge,
@@ -14,7 +12,6 @@ import {
   useNodesState,
   useReactFlow,
 } from "@xyflow/react";
-import { useViewport } from "@xyflow/react"; // available in @xyflow/react >= 12
 import Node from "./components/Node";
 import { INode } from "./types";
 
@@ -22,14 +19,19 @@ const nodeTypes = { custom: Node };
 
 type FlowProps = {
   setEdges: (edges: any[]) => void;
+  nodeClicked: (node: INode) => void;
 };
 
 export type FlowHandle = {
-  spawnNode: (template: INode, id:number, pos?: { x: number; y: number }) => string;
+  spawnNode: (
+    template: INode,
+    id: number,
+    pos?: { x: number; y: number }
+  ) => string;
 };
 
 const Flow = forwardRef<FlowHandle, FlowProps>(function Flow(
-  { setEdges },
+  { setEdges, nodeClicked },
   ref
 ) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -37,7 +39,6 @@ const Flow = forwardRef<FlowHandle, FlowProps>(function Flow(
 
   const { screenToFlowPosition } = useReactFlow();
   const paneRef = useRef<HTMLDivElement | null>(null);
-  const idCounter = useRef(1);
 
   const onConnect = useCallback(
     (params: any) => _setEdges((eds: any) => addEdge(params, eds)),
@@ -60,18 +61,28 @@ const Flow = forwardRef<FlowHandle, FlowProps>(function Flow(
   }, [screenToFlowPosition]);
 
   useImperativeHandle(ref, () => ({
-    spawnNode: (template: INode, id: number, pos?: { x: number; y: number }) => {
+    spawnNode: (
+      template: INode,
+      id: number,
+      pos?: { x: number; y: number }
+    ) => {
       const position = pos ?? centerFlowPos();
+
+      const nodeForData: INode = {
+        id,
+        name: template.name,
+        inputs: template.inputs,
+        outputs: template.outputs,
+        properties: template.properties
+      };
 
       const newNode = {
         id: String(id),
         type: "custom",
         position,
         data: {
-          id,
-          label: template.name,
-          outputs: template.outputs,
-          inputs: template.inputs,
+          node: nodeForData,
+          nodeClicked,
         },
       };
 
