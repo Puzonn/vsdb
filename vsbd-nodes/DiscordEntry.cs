@@ -9,33 +9,26 @@ using System.Threading;
 [NodeOutput("OnMessageDelete", typeof(MessageDeletedEvent))]
 public sealed class DiscordEntry : NodeDiscordClient, IEventSourceNode
 {
-    private int _nodeId;
-
-    public override ValueTask Execute(NodeContext ctx)
+    public override ValueTask Execute(NodeExecutionContext execution)
     {
-        ctx.Inputs ??= new(StringComparer.OrdinalIgnoreCase);
-        ctx.Outputs ??= new(StringComparer.OrdinalIgnoreCase);
-        foreach (var kv in ctx.Inputs)
-            ctx.Outputs[kv.Key] = kv.Value;
+        execution.Inputs ??= new(StringComparer.OrdinalIgnoreCase);
+        execution.Outputs ??= new(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var kv in execution.Inputs)
+            execution.Outputs[kv.Key] = kv.Value;
         return ValueTask.CompletedTask;
-    }
-
-    public override void OnNodeCreate(NodeContext context)
-    {
-        _nodeId = context.NodeId;
-
     }
 
     public async Task StartAsync(IEventDispatcher dispatcher, CancellationToken ct)
     {
-        await base.Execute(new NodeContext() { CancellationToken = ct });
+        await base.Execute(null);
 
         Client.MessageCreate += async e =>
-        {
+        {    
             Task ReplyAsync(string reply, CancellationToken t) => e.ReplyAsync(reply, null, t);
             var messageCreatedEvent = new MessageCreatedEvent(e.Content, e.Author.Username, e.Author.IsBot, ReplyAsync);
 
-            dispatcher.Emit(new Seed(_nodeId, new(StringComparer.OrdinalIgnoreCase)
+            dispatcher.Emit(new Seed(Context.NodeId, new(StringComparer.OrdinalIgnoreCase)
             {
                 ["OnMessageCreate"] = messageCreatedEvent
             }));

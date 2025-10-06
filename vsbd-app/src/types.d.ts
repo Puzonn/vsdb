@@ -11,6 +11,7 @@ export interface NodeOutput {
 export interface ActionNode {
   readonly id: number;
   readonly name: string;
+  readonly properties: NodeProperty[];
 }
 
 export interface NodeConnection {
@@ -36,5 +37,5 @@ export interface INode {
 export interface NodeProperty {
   readonly name: string;
   readonly type: string;
-  readonly defaultValue: string;
+  readonly value: string;
 }

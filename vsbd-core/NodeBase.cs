@@ -2,8 +2,14 @@
 {
     public abstract class NodeBase
     {
-        public abstract ValueTask Execute(NodeContext context);
-        public virtual void OnNodeCreate(NodeContext context){}
+        public NodeContext Context { get; set; }
+
+        public abstract ValueTask Execute(NodeExecutionContext execution);
+        
+        public virtual void OnNodeCreate()
+        {
+
+        }
     }
 }
 

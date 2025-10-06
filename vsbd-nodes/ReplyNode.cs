@@ -6,17 +6,19 @@ using System.Threading.Tasks;
 public class ReplyNode : NodeBase
 {
     [NodeProperty("MessageTemplate", typeof(string), "Hello {0}")]
-    public string Message { get; }
+    public string Message { get; set; }
 
-    public override async ValueTask Execute(NodeContext context)
+    public override async ValueTask Execute(NodeExecutionContext execution)
     {
-        var e = context.GetInput<MessageCreatedEvent>("Message");
+        var e = execution.GetInput<MessageCreatedEvent>("Message");
 
         if (e.IsBot)
         {
             return;
         }
 
-        await e.ReplyAsync(Message, context.CancellationToken);
+        string formated = string.Format(Message, e.Author);
+        
+        await e.ReplyAsync(formated, Context.CancellationToken);
     }
 }

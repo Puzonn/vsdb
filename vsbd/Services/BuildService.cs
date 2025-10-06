@@ -1,13 +1,14 @@
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using vsbd_core;
 
 public class BuildService
 {
     private List<Node> _nodes = [];
 
-    const string AssemblyName = "vsbd-nodes";
+    private const string AssemblyName = "vsbd-nodes";
 
     public async Task<BuildResult> Compile()
     {
@@ -189,14 +190,14 @@ public class BuildService
         }
 
         var instance = Activator.CreateInstance(type) as NodeBase;
-        
+
         if (instance is null)
         {
             throw new Exception($"Could not create instance of {name}");
         }
 
         INodeLogger nodeLogger = new NodeLogger(logger);
-        
+
         instance.Context = new NodeContext()
         {
             Logger = nodeLogger,
@@ -206,5 +207,32 @@ public class BuildService
         instance!.OnNodeCreate();
 
         return instance;
+    }
+
+    public void SetProperties(NodeBase node, NodeProperty[] properties)
+    {
+        const BindingFlags attr = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+        try
+        {
+            var props = node.GetType().GetProperties(attr);
+
+            foreach (var p in properties)
+            {
+                var prop = props.Where(x => x.Name == p.Name).FirstOrDefault();
+
+                if (prop is null)
+                {
+                    continue;
+                }
+
+                var value = Convert.ChangeType(p.Value, prop.PropertyType); //This has own rules lol. TODO: make it not crash entire stack 
+                prop.SetValue(node, value, attr, binder: null, index: null, culture: null);
+            }
+        }
+        catch (Exception ex)
+        {
+
+        }
     }
 }

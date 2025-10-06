@@ -34,6 +34,7 @@ public class FlowRunnerService
 
         var reachable = new HashSet<int>(start);
         var q = new Queue<int>(start);
+
         while (q.Count > 0)
         {
             var u = q.Dequeue();
@@ -71,6 +72,8 @@ public class FlowRunnerService
 
             var compiled = _buildService.GetCompiledNode(node.Name, node.Id, _logger)
                           ?? throw new InvalidOperationException($"No implementation for node '{node.Name}'.");
+
+            _buildService.SetProperties(compiled, node.Properties);
 
             if (compiled == null)
             {

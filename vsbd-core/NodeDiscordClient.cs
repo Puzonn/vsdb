@@ -7,10 +7,10 @@ public class NodeDiscordClient : NodeBase
     public GatewayClient? Client;
     private Task? _runTask;
 
-    public override ValueTask Execute(NodeContext context)
+    public override ValueTask Execute(NodeExecutionContext execution)
     {
         Client = new GatewayClient(
-            new BotToken("MTI1OTg2ODk2OTA2NjgyMzc1MA.G2lD_9.2LX-F8g0F6MkGQktPYoCVPBSlWgEtKE_sZvHUc"),
+            new BotToken("MTI1OTg2ODk2OTA2NjgyMzc1MA.GN0YRp.LWA_7GPhWiF1tuvbwbZk5ZfW_V8ycx2Dsk35LU"),
             new GatewayClientConfiguration { });
 
         _runTask = Task.Run(async () =>
@@ -19,7 +19,7 @@ public class NodeDiscordClient : NodeBase
             {
                 await Client.StartAsync().ConfigureAwait(false);
 
-                await Task.Delay(Timeout.InfiniteTimeSpan, context.CancellationToken)
+                await Task.Delay(Timeout.InfiniteTimeSpan, Context.CancellationToken)
                           .ConfigureAwait(false);
             }
             catch (Exception ex) { }
