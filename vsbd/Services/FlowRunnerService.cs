@@ -64,11 +64,9 @@ public class FlowRunnerService
             var node = nodesById[nodeId];
 
             inputsForNode.TryGetValue(nodeId, out var mergedInputs);
-            var ctx = new NodeContext
+            var ctx = new NodeExecutionContext
             {
                 Inputs = mergedInputs ?? new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase),
-                CancellationToken = ct,
-                Logger = new NodeLogger(_logger)
             };
 
             var compiled = _buildService.GetCompiledNode(node.Name, node.Id, _logger)

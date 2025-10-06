@@ -189,13 +189,21 @@ public class BuildService
         }
 
         var instance = Activator.CreateInstance(type) as NodeBase;
-        INodeLogger nodeLogger = new NodeLogger(logger);
+        
+        if (instance is null)
+        {
+            throw new Exception($"Could not create instance of {name}");
+        }
 
-        instance!.OnNodeCreate(new NodeContext()
+        INodeLogger nodeLogger = new NodeLogger(logger);
+        
+        instance.Context = new NodeContext()
         {
             Logger = nodeLogger,
             NodeId = id,
-        });
+        };
+
+        instance!.OnNodeCreate();
 
         return instance;
     }
