@@ -10,7 +10,7 @@ public class NodeDiscordClient : NodeBase
     public override ValueTask Execute(NodeExecutionContext execution)
     {
         Client = new GatewayClient(
-            new BotToken("MTI1OTg2ODk2OTA2NjgyMzc1MA.GN0YRp.LWA_7GPhWiF1tuvbwbZk5ZfW_V8ycx2Dsk35LU"),
+            new BotToken(""),
             new GatewayClientConfiguration { });
 
         _runTask = Task.Run(async () =>
