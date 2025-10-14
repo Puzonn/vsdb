@@ -1,7 +1,6 @@
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using vsbd_core;
 
 public class BuildService
@@ -9,6 +8,14 @@ public class BuildService
     private List<Node> _nodes = [];
 
     private const string AssemblyName = "vsbd-nodes";
+    private readonly ILogger<BuildService> _logger;
+
+    public BuildService(ILogger<BuildService> logger)
+    {
+        _logger = logger;
+    }
+
+    static bool IsSigned(Assembly a) => a.GetName().GetPublicKeyToken()?.Length > 0;
 
     public async Task<BuildResult> Compile()
     {
@@ -33,7 +40,7 @@ public class BuildService
         if (csFiles.Length == 0)
             return new BuildResult(false, $"No .cs files found.");
 
-        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp9)
+        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp12)
             .WithPreprocessorSymbols("DEBUG", "TRACE");
 
         var trees = csFiles.Select(f => CSharpSyntaxTree.ParseText(System.IO.File.ReadAllText(f), parseOptions, f)).ToList();
@@ -48,12 +55,20 @@ public class BuildService
         if (!File.Exists(coreDll))
             return new BuildResult(false, $"Core not found: {coreDll}");
 
+        var coreAsm = Assembly.LoadFrom(coreDll);
+        _logger.LogInformation($"core signed: {IsSigned(coreAsm)}");
+        foreach (var g in coreAsm.GetCustomAttributes<System.Runtime.CompilerServices.InternalsVisibleToAttribute>())
+        {
+            _logger.LogInformation($"IVT -> {g.AssemblyName}");
+        }
         refs.Add(MetadataReference.CreateFromFile(coreDll));
 
         var compOptions = new CSharpCompilationOptions(
             OutputKind.DynamicallyLinkedLibrary,
             optimizationLevel: OptimizationLevel.Debug,
-            allowUnsafe: true,
+            cryptoKeyContainer: null,
+            cryptoKeyFile: null,
+            allowUnsafe: false,
             deterministic: true);
 
         var compilation = CSharpCompilation.Create(

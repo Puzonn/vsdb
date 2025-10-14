@@ -9,6 +9,9 @@ using System.Threading;
 [NodeOutput("OnMessageDelete", typeof(MessageDeletedEvent))]
 public sealed class DiscordEntry : NodeDiscordClient, IEventSourceNode
 {
+    [NodeProperty("Bot Token", typeof(string), "")]
+    public string Token { get; set; }
+
     public override ValueTask Execute(NodeExecutionContext execution)
     {
         execution.Inputs ??= new(StringComparer.OrdinalIgnoreCase);
@@ -22,9 +25,9 @@ public sealed class DiscordEntry : NodeDiscordClient, IEventSourceNode
     public async Task StartAsync(IEventDispatcher dispatcher, CancellationToken ct)
     {
         await base.Execute(null);
-
+        
         Client.MessageCreate += async e =>
-        {    
+        {
             Task ReplyAsync(string reply, CancellationToken t) => e.ReplyAsync(reply, null, t);
             var messageCreatedEvent = new MessageCreatedEvent(e.Content, e.Author.Username, e.Author.IsBot, ReplyAsync);
 

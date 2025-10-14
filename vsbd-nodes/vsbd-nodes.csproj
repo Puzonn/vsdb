@@ -7,7 +7,10 @@
         <RootNamespace>vsbd_nodes</RootNamespace>
         <OutputType>Library</OutputType>
     </PropertyGroup>
-
+ <PropertyGroup>
+        <SignAssembly>false</SignAssembly>
+        <PublicSign>false</PublicSign>
+    </PropertyGroup>
     <ItemGroup>
       <ProjectReference Include="..\vsbd-core\vsbd-core.csproj" />
     </ItemGroup>
