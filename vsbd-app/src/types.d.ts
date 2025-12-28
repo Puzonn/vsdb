@@ -1,41 +1,34 @@
-export interface NodeInput {
-  readonly name: string;
-  readonly type: TypeName;
+interface ProjectRunResult {
+  success: boolean;
+  errors?: string | null;
+  nodes?: ProjectNode[] | null;
 }
 
-export interface NodeOutput {
-  readonly name: string;
-  readonly type: TypeName;
+interface ProjectNode {
+  name: string;
+  sourceCode: string;
+  outputs: NodeOutput[];
+  inputs: NodeInput[];
+  nodeProperties: NodeProperty[];
 }
 
-export interface ActionNode {
-  readonly id: number;
-  readonly name: string;
-  readonly properties: NodeProperty[];
+interface NodeInput {
+  type: string;
+  name: string;
 }
 
-export interface NodeConnection {
-  readonly from: number;
-  readonly fromType: PortKind;
-  readonly to: number;
-  readonly toType: PortKind;
+interface NodeOutput {
+  type: string;
+  name: string;
 }
 
-export interface NodeActionMap {
-  readonly nodes: readonly ActionNode[];
-  readonly connections: readonly NodeConnection[];
+interface NodeProperty {
+  type: string;
+  name: string;
+  defaultValue?: string;
 }
 
-export interface INode {
-  readonly name: string;
-  readonly id: number;
-  readonly inputs: readonly NodeInput[];
-  readonly outputs: readonly NodeOutput[];
-  readonly properties: readonly NodeProperty[];
-}
-
-export interface NodeProperty {
-  readonly name: string;
-  readonly type: string;
-  readonly value: string;
+interface ProjectCreationResponse {
+  projectId: string;
+  nodes?: ProjectNode[] | null;
 }
