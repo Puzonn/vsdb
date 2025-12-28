@@ -1,36 +1,32 @@
 using System.Reflection;
+using System.Runtime.Loader;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using vsbd_core;
 
 public class BuildService
 {
-    private List<Node> _nodes = [];
-
-    private const string AssemblyName = "vsbd-nodes";
     private readonly ILogger<BuildService> _logger;
+    private readonly IWebHostEnvironment _env;
 
-    public BuildService(ILogger<BuildService> logger)
+    public BuildService(ILogger<BuildService> logger, IWebHostEnvironment env)
     {
+        _env = env;
         _logger = logger;
     }
 
-    static bool IsSigned(Assembly a) => a.GetName().GetPublicKeyToken()?.Length > 0;
+    static bool IsSigned(Assembly a)
+        => a.GetName().GetPublicKeyToken()?.Length > 0;
 
-    public async Task<BuildResult> Compile()
+    public async Task<BuildResult> Compile(string projectDir, string projectId)
     {
-        _nodes = [];
+        var assemblyName = $"vsbd-nodes-{projectId}";
 
         var baseDir = AppContext.BaseDirectory;
-        var outDir = Path.Combine(baseDir, "Libraries");
+        var outDir = Path.Combine(baseDir, "Libraries", projectId);
         Directory.CreateDirectory(outDir);
 
-        var dllPath = Path.Combine(outDir, $"{AssemblyName}.dll");
-        var pdbPath = Path.Combine(outDir, $"{AssemblyName}.pdb");
-        var projectDir = @"/home/puzonne/vsbd/vsbd-nodes/";
-
-        if (!Directory.Exists(projectDir))
-            return new BuildResult(false, $"ProjectDir not found: {projectDir}");
+        var dllPath = Path.Combine(outDir, $"{assemblyName}.dll");
 
         var csFiles = Directory.EnumerateFiles(projectDir, "*.cs", SearchOption.AllDirectories)
             .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
@@ -38,92 +34,105 @@ public class BuildService
             .ToArray();
 
         if (csFiles.Length == 0)
-            return new BuildResult(false, $"No .cs files found.");
+            return new BuildResult(false, "No .cs files found.");
 
-        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp12)
-            .WithPreprocessorSymbols("DEBUG", "TRACE");
-
-        var trees = csFiles.Select(f => CSharpSyntaxTree.ParseText(System.IO.File.ReadAllText(f), parseOptions, f)).ToList();
+        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp12);
+        var trees = csFiles.Select(f =>
+            CSharpSyntaxTree.ParseText(File.ReadAllText(f), parseOptions, f)
+        );
 
         var tpa = (string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? "";
-        var refs = tpa.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-                      .Where(p => p.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-                      .Select(p => (MetadataReference)MetadataReference.CreateFromFile(p))
-                      .ToList();
+        var refs = tpa.Split(Path.PathSeparator)
+            .Select(p => MetadataReference.CreateFromFile(p))
+            .ToList();
 
-        var coreDll = Path.Combine(baseDir, "Libraries", "vsbd-core.dll");
-        if (!File.Exists(coreDll))
-            return new BuildResult(false, $"Core not found: {coreDll}");
-
-        var coreAsm = Assembly.LoadFrom(coreDll);
-        _logger.LogInformation($"core signed: {IsSigned(coreAsm)}");
-        foreach (var g in coreAsm.GetCustomAttributes<System.Runtime.CompilerServices.InternalsVisibleToAttribute>())
-        {
-            _logger.LogInformation($"IVT -> {g.AssemblyName}");
-        }
-        refs.Add(MetadataReference.CreateFromFile(coreDll));
-
-        var compOptions = new CSharpCompilationOptions(
-            OutputKind.DynamicallyLinkedLibrary,
-            optimizationLevel: OptimizationLevel.Debug,
-            cryptoKeyContainer: null,
-            cryptoKeyFile: null,
-            allowUnsafe: false,
-            deterministic: true);
+        var coreAsm = typeof(NodeBase).Assembly;
+        refs.Add(MetadataReference.CreateFromFile(coreAsm.Location));
 
         var compilation = CSharpCompilation.Create(
-            assemblyName: AssemblyName,
-            syntaxTrees: trees,
-            references: refs,
-            options: compOptions);
+            assemblyName,
+            trees,
+            refs,
+            new CSharpCompilationOptions(
+                OutputKind.DynamicallyLinkedLibrary,
+                strongNameProvider: null
+            )
+        );
 
-        using var dll = System.IO.File.Create(dllPath);
-        var emitResult = compilation.Emit(peStream: dll);
+        using var fs = File.Create(dllPath);
+        var result = compilation.Emit(fs);
 
-        var diags = emitResult.Diagnostics
-            .Where(d => d.Severity is DiagnosticSeverity.Error or DiagnosticSeverity.Warning)
-            .Select(d =>
-            {
-                var span = d.Location.GetLineSpan();
-                var file = span.Path ?? "";
-                var line = span.StartLinePosition.Line + 1;
-                var col = span.StartLinePosition.Character + 1;
-                return $"{d.Severity} {d.Id}: {d.GetMessage()} ({file}:{line},{col})";
-            })
-            .ToArray();
-
-        if (!emitResult.Success)
-            return new BuildResult(false, string.Join("\n", diags));
-
-        return new BuildResult(true, string.Join("\n", diags));
-    }
-
-    public async Task<NodeResult> GetNodes()
-    {
-        if (_nodes.Count > 0)
+        if (!result.Success)
         {
-            return new NodeResult(true, null, _nodes.ToArray());
+            var errors = result.Diagnostics
+                .Where(d => d.Severity == DiagnosticSeverity.Error)
+                .Select(d => d.ToString());
+
+            return new BuildResult(false, string.Join("\n", errors));
         }
 
-        var full = Path.Combine(AppContext.BaseDirectory, "Libraries", $"{AssemblyName}.dll");
-        if (!File.Exists(full))
-            return new NodeResult(false, "dll not found");
+        return new BuildResult(true, null);
+    }
 
-        var pluginDir = Path.GetDirectoryName(full)!;
-        var coreAsm = typeof(vsbd_core.NodeBase).Assembly;
-        var coreName = coreAsm.GetName().Name;
+    public BuildResult CompileInMemory(IReadOnlyList<ScriptSource> scripts, string projectId, out byte[] assemblyBytes)
+    {
+        var assemblyName = $"vsbd-nodes-{projectId}";
+        assemblyBytes = Array.Empty<byte>();
 
-        var alc = new System.Runtime.Loader.AssemblyLoadContext(AssemblyName, isCollectible: true);
-        alc.Resolving += (ctx, name) =>
+        var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp12);
+
+        var trees = scripts.Select(s =>
+            CSharpSyntaxTree.ParseText(
+                s.Source,
+                parseOptions,
+                path: s.FileName
+            )
+        );
+
+        var refs = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? "")
+            .Split(Path.PathSeparator)
+            .Select(p => MetadataReference.CreateFromFile(p))
+            .ToList();
+
+        refs.Add(MetadataReference.CreateFromFile(typeof(NodeBase).Assembly.Location));
+
+        var compilation = CSharpCompilation.Create(
+            assemblyName,
+            trees,
+            refs,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
+
+        using var ms = new MemoryStream();
+        var result = compilation.Emit(ms);
+
+        if (!result.Success)
         {
-            if (string.Equals(name.Name, coreName, StringComparison.OrdinalIgnoreCase))
-                return coreAsm;
+            var errors = result.Diagnostics
+                .Where(d => d.Severity == DiagnosticSeverity.Error)
+                .Select(d => d.ToString());
 
-            var candidate = Path.Combine(pluginDir, $"{name.Name}.dll");
-            return File.Exists(candidate) ? ctx.LoadFromAssemblyPath(candidate) : null;
-        };
+            return new BuildResult(false, string.Join('\n', errors));
+        }
 
-        var asm = alc.LoadFromAssemblyPath(full);
+        assemblyBytes = ms.ToArray();
+        return new BuildResult(true, null);
+    }
+
+    public async Task<NodeResult> GetNodes(
+        byte[] assemblyBytes,
+        IReadOnlyList<ScriptSource> scripts,
+        bool attachSourceCode
+    )
+    {
+        var coreAsm = typeof(NodeBase).Assembly;
+        var alc = new AssemblyLoadContext("vsbd-nodes", isCollectible: true);
+
+        alc.Resolving += (_, name) =>
+            name.Name == coreAsm.GetName().Name ? coreAsm : null;
+
+        using var ms = new MemoryStream(assemblyBytes);
+        var asm = alc.LoadFromStream(ms);
 
         try
         {
@@ -131,123 +140,54 @@ public class BuildService
 
             foreach (var type in asm.GetExportedTypes().Where(t => t.IsClass && !t.IsAbstract))
             {
-                var inputAttrs = type.GetCustomAttributes(typeof(NodeInputAttribute), inherit: false)
-                                     .Cast<NodeInputAttribute>()
-                                     .ToArray();
+                var inputs = type
+                    .GetCustomAttributes<NodeInputAttribute>(false)
+                    .Select(a => new NodeInput(a.Type.FullName!, a.Name))
+                    .ToArray();
 
-                var inputs = inputAttrs.Select(x => new NodeInput(x.Type.FullName!, x.Name)).ToArray();
+                var outputs = type
+                    .GetCustomAttributes<NodeOutputAttribute>(false)
+                    .Select(a => new NodeOutput(a.Type.FullName!, a.Name))
+                    .ToArray();
 
-                var outputAttrs = type.GetCustomAttributes(typeof(NodeOutputAttribute), inherit: false)
-                                      .Cast<NodeOutputAttribute>()
-                                      .ToArray();
+                var properties = type
+                    .GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    .Select(p => (Prop: p, Attr: p.GetCustomAttribute<NodePropertyAttribute>()))
+                    .Where(x => x.Attr != null)
+                    .Select(x => new NodeProperty(
+                        x.Prop.PropertyType.FullName ?? "?",
+                        x.Prop.Name,
+                        x.Attr!.DefaultValue?.ToString()
+                    ))
+                    .ToArray();
 
-                var outputs = outputAttrs.Select(x => new NodeOutput(x.Type.FullName!, x.Name)).ToArray();
+                string? sourceCode = null;
 
-                var props = type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-                var exportedProps = new List<NodeProperty>();
-                foreach (var prop in props)
+                if (attachSourceCode)
                 {
-                    var propAttr = prop.GetCustomAttribute<NodePropertyAttribute>();
-                    if (propAttr != null)
-                    {
-                        exportedProps.Add(new NodeProperty(prop.PropertyType.FullName ?? "?",
-                            prop.Name,
-                            propAttr.DefaultValue.ToString()));
-                    }
+                    sourceCode = scripts
+                        .FirstOrDefault(s => Path.GetFileNameWithoutExtension(s.FileName) == type.Name)
+                        ?.Source;
                 }
 
-                nodes.Add(new Node(type.FullName!)
+                nodes.Add(new Node
                 {
+                    Name = type.FullName!,
+                    SourceCode = sourceCode,
                     Inputs = inputs,
                     Outputs = outputs,
-                    Properties = exportedProps.ToArray(),
+                    Properties = properties
                 });
             }
-
-            _nodes = nodes;
 
             return new NodeResult(true, null, nodes.ToArray());
         }
         catch (ReflectionTypeLoadException ex)
         {
-            var errors = ex.LoaderExceptions.Select(e => e.Message).ToArray();
-            return new NodeResult(false, string.Join("\n", errors));
-        }
-    }
-
-    public NodeBase? GetCompiledNode(string name, int id, ILogger logger)
-    {
-        var full = Path.Combine(AppContext.BaseDirectory, "Libraries", $"{AssemblyName}.dll");
-
-        var pluginDir = Path.GetDirectoryName(full)!;
-        var coreAsm = typeof(vsbd_core.NodeBase).Assembly;
-        var coreName = coreAsm.GetName().Name;
-
-        var alc = new System.Runtime.Loader.AssemblyLoadContext(AssemblyName, isCollectible: true);
-        alc.Resolving += (ctx, name) =>
-        {
-            if (string.Equals(name.Name, coreName, StringComparison.OrdinalIgnoreCase))
-                return coreAsm;
-
-            var candidate = Path.Combine(pluginDir, $"{name.Name}.dll");
-            return File.Exists(candidate) ? ctx.LoadFromAssemblyPath(candidate) : null;
-        };
-
-        var asm = alc.LoadFromAssemblyPath(full);
-
-        var exportedTypes = asm.GetExportedTypes().Where(t => t.IsClass && !t.IsAbstract);
-        var type = exportedTypes.Where(x => x.FullName == name).FirstOrDefault();
-
-        if (type == null)
-        {
-            return null;
-        }
-
-        var instance = Activator.CreateInstance(type) as NodeBase;
-
-        if (instance is null)
-        {
-            throw new Exception($"Could not create instance of {name}");
-        }
-
-        INodeLogger nodeLogger = new NodeLogger(logger);
-
-        instance.Context = new NodeContext()
-        {
-            Logger = nodeLogger,
-            NodeId = id,
-        };
-
-        instance!.OnNodeCreate();
-
-        return instance;
-    }
-
-    public void SetProperties(NodeBase node, NodeProperty[] properties)
-    {
-        const BindingFlags attr = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-
-        try
-        {
-            var props = node.GetType().GetProperties(attr);
-
-            foreach (var p in properties)
-            {
-                var prop = props.Where(x => x.Name == p.Name).FirstOrDefault();
-
-                if (prop is null)
-                {
-                    continue;
-                }
-
-                var value = Convert.ChangeType(p.Value, prop.PropertyType); //This has own rules lol. TODO: make it not crash entire stack 
-                prop.SetValue(node, value, attr, binder: null, index: null, culture: null);
-            }
-        }
-        catch (Exception ex)
-        {
-
+            return new NodeResult(
+                false,
+                string.Join('\n', ex.LoaderExceptions.Select(e => e.Message))
+            );
         }
     }
 }

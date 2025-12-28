@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
@@ -6,17 +8,19 @@ builder.Services.AddCors(options =>
     options.AddPolicy(name: "cors",
                       policy =>
                       {
-                          policy.WithOrigins("http://localhost:1420");
+                          policy.WithOrigins("http://localhost:5173");
                           policy.AllowAnyHeader();
                           policy.AllowAnyMethod();
                           policy.AllowCredentials();
                       });
 });
 
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Default"))
+);
+
 builder.Services.AddLogging();
 builder.Services.AddScoped<BuildService>();
-builder.Services.AddScoped<FlowRunnerService>();
-builder.Services.AddSingleton<IFlowJobManager, FlowJobManager>();
 
 builder.Services.AddSignalR();
 
@@ -27,6 +31,7 @@ app.UseCors("cors");
 app.MapHub<FlowHub>("/flow");
 
 app.MapControllers();
+app.UseStaticFiles();
 
 
 app.Run();

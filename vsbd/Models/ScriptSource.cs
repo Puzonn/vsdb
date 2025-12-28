@@ -1,0 +1,1 @@
+public record ScriptSource(string FileName, string Source);
