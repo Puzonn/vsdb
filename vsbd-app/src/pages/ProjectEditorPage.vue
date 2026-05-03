@@ -1,223 +1,450 @@
 <template>
-  <div
-    class="h-screen w-screen bg-zinc-900 p-4 flex justify-center flex-col gap-5"
-  >
-    <h1>Project Id: {{ projectId }}</h1>
-
+  <div class="min-h-screen w-screen bg-zinc-950 text-zinc-100 p-4">
     <div
-      v-if="selectedNode"
-      class="mb-3 inline-flex w-full rounded-lg border border-zinc-800 overflow-hidden"
+      class="mx-auto flex h-[calc(100vh-2rem)] max-w-[1800px] flex-col gap-4"
     >
-      <button
-        v-on:click="switchDisplay('properties')"
-        class="flex-1 p-4 flex justify-center items-center font-semibold"
+      <header
+        class="flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900/80 px-5 py-4 shadow-lg"
       >
-        Proporties
-      </button>
-
-      <button
-        v-on:click="switchDisplay('code')"
-        class="flex-1 p-4 flex justify-center items-center font-semibold"
-      >
-        Code
-      </button>
-      <button
-        v-on:click="switchDisplay('flow')"
-        class="flex-1 p-4 flex justify-center items-center font-semibold"
-      >
-        Flow
-      </button>
-    </div>
-
-    <div class="flex flex-row h-full w-full gap-5">
-      <NodeList
-        :nodes="nodes"
-        :selected-node="selectedNode"
-        v-on:node-click="onNodeClick"
-      ></NodeList>
-
-      <div class="flex-1 h-full">
-        <textarea
-          v-if="display == 'code' && selectedNode"
-          v-model="selectedNode.sourceCode"
-          class="h-full w-full resize-none bg-zinc-950 text-zinc-100 font-mono p-4 rounded-lg outline-none text-base"
-          spellcheck="false"
-        />
-
-        <div
-          v-if="display == 'properties' && selectedNode"
-          class="h-full w-full bg-zinc-950 rounded-lg p-4"
-        >
-          <NodeProperties :node="selectedNode"></NodeProperties>
+        <div>
+          <p class="text-xs uppercase tracking-widest text-zinc-500">Project</p>
+          <h1 class="text-xl font-bold">
+            {{ projectId === "undefined" ? "New Project" : projectId }}
+          </h1>
         </div>
 
-        <div
-          v-if="display == 'flow' && selectedNode"
-          class="h-full w-full bg-zinc-950 rounded-lg p-4"
-        >
-          <ProjectFlow
-            v-if="display === 'flow' && selectedNode"
-            v-model:nodes="flowNodes"
-            v-model:edges="flowEdges"
-          ></ProjectFlow>
+        <div class="flex gap-3">
+          <button
+            v-if="projectId === 'undefined'"
+            class="rounded-xl bg-indigo-600 px-5 py-2 font-semibold text-white hover:bg-indigo-500 active:scale-95 transition"
+            @click="createProject"
+          >
+            Create Project
+          </button>
+
+          <template v-else>
+            <button
+              class="rounded-xl bg-zinc-800 px-5 py-2 font-semibold hover:bg-zinc-700 active:scale-95 transition"
+              @click="saveProject"
+            >
+              Save
+            </button>
+
+            <button
+              class="rounded-xl bg-emerald-600 px-5 py-2 font-semibold text-white hover:bg-emerald-500 active:scale-95 transition"
+              @click="compileProject"
+            >
+              Compile
+            </button>
+            <button
+              class="rounded-xl bg-blue-600 px-5 py-2 font-semibold text-white hover:bg-blue-500 active:scale-95 transition"
+              @click="start"
+            >
+              Start
+            </button>
+          </template>
         </div>
+      </header>
+
+      <div class="grid min-h-0 flex-1 grid-cols-[320px_1fr] gap-4">
+        <aside
+          class="min-h-0 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3 shadow-lg"
+        >
+          <div class="mb-3 flex items-center justify-between px-2">
+            <h2 class="font-semibold">Nodes</h2>
+            <span
+              class="rounded-full bg-zinc-800 px-2 py-1 text-xs text-zinc-400"
+            >
+              {{ projectNodes.length }}
+            </span>
+          </div>
+
+          <NodeList
+            :nodes="projectNodes"
+            :selected-node="selectedNode"
+            @node-click="onNodeClick"
+          />
+        </aside>
+
+        <main
+          class="min-h-0 rounded-2xl border border-zinc-800 bg-zinc-900/70 shadow-lg overflow-hidden"
+        >
+          <div class="flex h-full flex-col">
+            <div
+              class="flex items-center justify-between border-b border-zinc-800 px-4 py-3"
+            >
+              <div class="inline-flex rounded-xl bg-zinc-950 p-1">
+                <button
+                  v-for="tab in tabs"
+                  :key="tab.value"
+                  class="rounded-lg px-5 py-2 text-sm font-semibold transition"
+                  :class="
+                    display === tab.value
+                      ? 'bg-zinc-800 text-white shadow'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                  "
+                  @click="switchDisplay(tab.value)"
+                >
+                  {{ tab.label }}
+                </button>
+              </div>
+
+              <div v-if="selectedNode" class="text-sm text-zinc-400">
+                Selected:
+                <span class="font-semibold text-zinc-200">
+                  {{ selectedNode.name }}
+                </span>
+              </div>
+            </div>
+
+            <div class="min-h-0 flex-1 p-4">
+              <div
+                v-if="display === 'projects'"
+                class="h-full w-full overflow-auto rounded-xl border border-zinc-800 bg-zinc-950 p-5"
+              >
+                <ProjectList
+                  :projects="projects"
+                  v-on:project-click="onProjectClick"
+                />
+              </div>
+
+              <div
+                v-if="!selectedNode && display !== 'flow'"
+                class="flex h-full items-center justify-center rounded-xl border border-dashed border-zinc-800 bg-zinc-950 text-zinc-500"
+              >
+                Select a node from the left panel
+              </div>
+
+              <textarea
+                v-else-if="display === 'code' && selectedNode"
+                v-model="selectedNode.sourceCode"
+                class="h-full w-full resize-none rounded-xl border border-zinc-800 bg-zinc-950 p-5 font-mono text-sm leading-6 text-zinc-100 outline-none focus:border-indigo-500"
+                spellcheck="false"
+              />
+
+              <div
+                v-else-if="display === 'code' && !selectedNode"
+                class="flex h-full items-center justify-center rounded-xl border border-dashed border-zinc-800 bg-zinc-950 text-zinc-500"
+              >
+                Select a library node to edit code
+              </div>
+
+              <div
+                v-else-if="display === 'properties' && selectedNode"
+                class="h-full w-full overflow-auto rounded-xl border border-zinc-800 bg-zinc-950 p-5"
+              >
+                <NodeProperties
+                  :node="selectedNode"
+                  :is-instance="!!selectedNode"
+                  @property-save="onPropertySave"
+                />
+              </div>
+
+              <div
+                v-else-if="display === 'flow'"
+                class="h-full w-full overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950"
+              >
+                <ProjectFlow
+                  :nodes="flowNodes"
+                  :edges="flowEdges"
+                  v-on:connect="onFlowConnect"
+                />
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
-    </div>
-
-    <div class="flex justify-center gap-5">
-      <button
-        v-if="projectId == 'undefined'"
-        class="text-white bg-zinc-950 px-5 py-2 font-bold rounded-lg"
-        v-on:click="createProject"
-      >
-        Create Project
-      </button>
-      <button
-        v-if="projectId !== 'undefined'"
-        class="text-white bg-zinc-950 px-5 py-2 font-bold rounded-lg"
-        v-on:click="sendProject"
-      >
-        Send Project
-      </button>
-      <button
-        v-if="projectId !== 'undefined'"
-        class="text-white bg-zinc-950 px-5 py-2 font-bold rounded-lg"
-        v-on:click="compileProject"
-      >
-        Compile Project
-      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import * as signalR from "@microsoft/signalr";
+import { computed, onMounted, ref, toRaw } from "vue";
 import NodeList from "../components/NodeList.vue";
 import NodeProperties from "../components/NodeProperties.vue";
 import ProjectFlow from "../components/ProjectFlow.vue";
-import type { Edge, Node } from "@vue-flow/core";
+import type { Connection, Edge, Node } from "@vue-flow/core";
+import { flowNodeToEditView, projectNodeToEditView } from "../utils/NodeUtils";
+import ProjectList from "../components/ProjectList.vue";
+
+type Display = "properties" | "code" | "flow" | "projects";
+
+const tabs = [
+  { label: "Properties", value: "properties" as const },
+  { label: "Code", value: "code" as const },
+  { label: "Flow", value: "flow" as const },
+  { label: "Projects", value: "projects" as const },
+];
 
 const projectId = ref("undefined");
-const nodes = ref<ProjectNode[]>([]);
-const selectedNode = ref<ProjectNode | undefined>(undefined);
-const display = ref<"properties" | "code" | "flow">("code");
-const flowEdges = ref<Edge[]>([]);
-const flowNodes = ref<Node[]>([
-  {
-    id: "event-1",
-    type: "visual",
-    position: { x: 100, y: 100 },
-    data: {
-      label: "On Start 1",
-      category: "event",
-      inputs: [
-        { id: "in-exec-0", label: "Exec" },
-        { id: "in-exec-1", label: "Exec" },
-      ],
-      outputs: [
-        { id: "out-exec-0", label: "Exec" },
-        { id: "out-exec-1", label: "Exec" },
-      ],
-    },
-  },
-  {
-    id: "event-2",
-    type: "visual",
-    position: { x: 400, y: 100 },
-    data: {
-      label: "On Start",
-      category: "event",
-      inputs: [
-        { id: "in-exec-0", label: "Exec" },
-        { id: "in-exec-1", label: "Exec" },
-      ],
-      outputs: [
-        { id: "out-exec-0", label: "Exec" },
-        { id: "out-exec-1", label: "Exec" },
-      ],
-    },
-  },
-]);
 
-onMounted(async () =>  {
-  const response = await fetch("http://localhost:5020/project/all")
-})
+const projectNodes = ref<ProjectNode[]>([]);
+const flowNodes = ref<Node<FlowNode>[]>([]);
+const projects = ref<Project[]>([]);
+
+const flowEdges = computed<Edge[]>(() => {
+  return flowNodes.value.flatMap((node) =>
+    node.data!.connections.map((connection) => ({
+      id: connection.id,
+      source: connection.sourceId,
+      target: connection.targetId,
+      sourceHandle: connection.sourceHandleId,
+      targetHandle: connection.targetHandleId,
+    })),
+  );
+});
+
+const selectedNode = ref<NodeEditView | undefined>(undefined);
+const display = ref<Display>("code");
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(toRaw(value)));
+}
+
+onMounted(async () => {
+  const response = await fetch("http://localhost:5020/project/all");
+  const result = (await response.json()) as Project[];
+
+  projects.value = result;
+});
+
+async function onProjectClick(project: Project) {
+  const response = await fetch(`http://localhost:5020/project/${project.id}`);
+
+  if (!response.ok) {
+    console.error("Failed to load project", response.status);
+    return;
+  }
+
+  const result = (await response.json()) as ProjectLoadResponse;
+  projectId.value = result.id;
+  projectNodes.value = result.nodes;
+
+  flowNodes.value = (result.flowNodes ?? []).map((node) => {
+    const projectNode = result.nodes.find((x) => x.name == node.name)!;
+    const nodeConnections = (result.flowEdges ?? []).filter(
+      (edge) => edge.sourceId === node.id,
+    );
+
+    return {
+      id: node.id,
+      type: "visual",
+      position: {
+        x: node.position?.x ?? 100,
+        y: node.position?.y ?? 100,
+      },
+      data: {
+        id: node.id,
+        name: node.name,
+        inputs: projectNode.inputs,
+        position: { x: 0, y: 0 },
+        outputs: projectNode.outputs,
+        properties: node.properties ?? [],
+        connections: nodeConnections.map((edge) => ({
+          id: edge.id,
+          sourceId: edge.sourceId,
+          targetId: edge.targetId,
+          sourceHandleId: edge.sourceHandleId ?? null,
+          targetHandleId: edge.targetHandleId ?? null,
+        })),
+        onDeleteClicked: () => onNodeRemove(node.id),
+        onSettingsClicked: () => onPropertyChange(node.id),
+      },
+    };
+  });
+
+  console.log("edges: ", flowEdges);
+  console.log("nodes: ", flowNodes);
+}
+
+async function start() {
+  const hub = new signalR.HubConnectionBuilder()
+    .withUrl("http://localhost:5020/flow")
+    .withAutomaticReconnect()
+    .configureLogging(signalR.LogLevel.Information)
+    .build();
+
+  await hub.start();
+
+  await hub.invoke("StartFlow", projectId.value)
+}
 
 async function createProject() {
   const response = await fetch("http://localhost:5020/project/create", {
     method: "POST",
   });
 
-  if (response.status == 200) {
-    const result = (await response.json()) as ProjectCreationResponse;
-
-    if (!result) {
-      console.error(result);
-      return;
-    }
-
-    projectId.value = result.projectId;
-    nodes.value =
-      result.nodes?.map((n) => ({
-        ...n,
-        inputs: n.inputs ?? [],
-        outputs: n.outputs ?? [],
-        nodeProperties: n.nodeProperties ?? [],
-      })) ?? [];
+  if (!response.ok) {
+    console.error("Failed to create project", response.status);
+    return;
   }
+
+  const result = (await response.json()) as ProjectCreationResponse;
+
+  projectId.value = result.projectId;
+
+  projectNodes.value =
+    result.nodes?.map((node) => ({
+      ...node,
+      inputs: node.inputs ?? [],
+      outputs: node.outputs ?? [],
+      properties: node.properties ?? [],
+    })) ?? [];
 }
 
 function onNodeClick(node: ProjectNode) {
-  if (display.value == "flow") {
-    const newNode = {
-      id: crypto.randomUUID(),
-      type: "visual",
-      position: { x: 0, y: 0 },
-      data: {
-        label: node.name,
-        category: "event",
-        inputs: node.inputs.map((e) => {
-          return {
-            id: crypto.randomUUID(),
-            label: e.name,
-          };
-        }),
-        outputs: node.outputs.map((e) => {
-          return {
-            id: crypto.randomUUID(),
-            label: e.name,
-          };
-        }),
-      },
-    };
-    flowNodes.value = [...flowNodes.value, newNode];
+  selectedNode.value = undefined;
 
-    console.log(newNode);
-  } else {
-    selectedNode.value = node;
+  if (display.value !== "flow") {
+    selectedNode.value = projectNodeToEditView(node);
+    return;
+  }
+
+  /* Create node instance */
+
+  const id = crypto.randomUUID();
+
+  const flowNodeData: FlowNode = {
+    id,
+    position: { x: 0, y: 0 },
+    name: node.name,
+    properties: clone(node.properties),
+    inputs: clone(node.inputs),
+    outputs: clone(node.outputs),
+    onDeleteClicked: () => onNodeRemove(id),
+    onSettingsClicked: () => onPropertyChange(id),
+    connections: [],
+  };
+
+  for (const input in flowNodeData.inputs) {
+    input;
+  }
+
+  const newNode: Node<FlowNode> = {
+    id,
+    type: "visual",
+    position: { x: 100, y: 100 },
+    data: flowNodeData,
+  };
+
+  flowNodes.value = [...flowNodes.value, newNode];
+}
+
+function onNodeRemove(id: string) {
+  flowNodes.value = flowNodes.value
+    .filter((node) => node.id !== id)
+    .map((node) => ({
+      ...node,
+      data: {
+        ...node.data!,
+        connections: node.data!.connections.filter(
+          (connection) =>
+            connection.sourceId !== id && connection.targetId !== id,
+        ),
+      },
+    }));
+
+  if (selectedNode.value?.id === id) {
+    selectedNode.value = undefined;
   }
 }
 
-function switchDisplay(state: "properties" | "code" | "flow") {
+function onPropertyChange(id: string) {
+  const node = flowNodes.value.find((node) => node.id === id);
+  const data = node?.data;
+
+  if (!node || !data) {
+    return;
+  }
+
+  const flowNode: FlowNode = {
+    position: { x: 0, y: 0 },
+    id: data.id,
+    name: data.name,
+    outputs: data.outputs,
+    inputs: data.inputs,
+    properties: data.properties,
+    onDeleteClicked: data.onDeleteClicked,
+    onSettingsClicked: data.onSettingsClicked,
+    connections: data.connections,
+  };
+
+  const editNode = flowNodeToEditView(flowNode);
+  editNode.onPropertySave = () => onPropertyChange(data.id);
+
+  selectedNode.value = editNode;
+
+  switchDisplay("properties");
+}
+
+function onFlowConnect(connection: Connection) {
+  const sourceNode = flowNodes.value.find(
+    (node) => node.id === connection.source,
+  );
+
+  if (!sourceNode || !connection.source || !connection.target) {
+    return;
+  }
+
+  console.log(connection);
+
+  sourceNode.data!.connections.push({
+    id: crypto.randomUUID(),
+    sourceId: connection.source,
+    targetId: connection.target,
+    sourceHandleId: connection.sourceHandle,
+    targetHandleId: connection.targetHandle,
+  });
+}
+
+function onPropertySave(properties: NodeProperty[], id: string) {
+  const node = flowNodes.value.find((node) => node.id === id);
+
+  if (!node || !node.data) {
+    return;
+  }
+
+  node.data.properties = clone(properties);
+
+  if (selectedNode.value?.id === id) {
+    selectedNode.value.properties = clone(properties);
+  }
+}
+
+function switchDisplay(state: Display) {
   display.value = state;
 }
 
-async function sendProject() {
-  const response = await fetch(
-    `http://localhost:5020/project/send/${projectId.value}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(
-        nodes.value.map((node) => ({
-          name: node.name,
-          sourceCode: node.sourceCode,
-        }))
+async function saveProject() {
+  await fetch(`http://localhost:5020/project/save/${projectId.value}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      libraries: projectNodes.value.map((node) => ({
+        name: node.name,
+        sourceCode: node.sourceCode,
+      })),
+      flowNodes: flowNodes.value.map((node) => ({
+        id: node.id,
+        type: node.type,
+        position: node.position,
+        name: node.data!.name,
+        properties: node.data!.properties,
+      })),
+      flowEdges: flowEdges.value.map(
+        (x): FlowConnection => ({
+          id: x.id,
+          sourceId: x.source,
+          targetId: x.target,
+          sourceHandleId: x.sourceHandle,
+          targetHandleId: x.targetHandle,
+        }),
       ),
-    }
-  );
+    }),
+  });
 }
 
 async function compileProject() {
@@ -228,22 +455,27 @@ async function compileProject() {
       headers: {
         "Content-Type": "application/json",
       },
-    }
+    },
   );
 
-  const result = (await response.json()) as ProjectRunResult;
-
-  if (!result) {
-    console.error(result);
+  if (!response.ok) {
+    console.error("Failed to compile project", response.status);
     return;
   }
 
-  nodes.value =
-    result.nodes?.map((n) => ({
-      ...n,
-      inputs: n.inputs ?? [],
-      outputs: n.outputs ?? [],
-      nodeProperties: n.nodeProperties ?? [],
+  const result = (await response.json()) as ProjectRunResult;
+
+  if (!result.success) {
+    console.error(result.errors);
+    return;
+  }
+
+  projectNodes.value =
+    result.nodes?.map((node) => ({
+      ...node,
+      inputs: node.inputs ?? [],
+      outputs: node.outputs ?? [],
+      properties: node.properties ?? [],
     })) ?? [];
 }
 </script>

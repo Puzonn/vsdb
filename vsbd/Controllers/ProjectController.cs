@@ -6,12 +6,17 @@ using Microsoft.EntityFrameworkCore;
 public class ProjectController : ControllerBase
 {
     private readonly BuildService _buildService;
+    private readonly ProjectRepository _projectRepository;
     private readonly AppDbContext _db;
     private readonly ILogger<ProjectController> _logger;
     private readonly IWebHostEnvironment _env;
+    private readonly PathService _path;
 
-    public ProjectController(ILogger<ProjectController> logger, IWebHostEnvironment env, BuildService buildService, AppDbContext db)
+    public ProjectController(ILogger<ProjectController> logger, IWebHostEnvironment env,
+     BuildService buildService, AppDbContext db, PathService path, ProjectRepository projectRepository)
     {
+        _projectRepository = projectRepository;
+        _path = path;
         _db = db;
         _buildService = buildService;
         _env = env;
@@ -26,83 +31,66 @@ public class ProjectController : ControllerBase
         return Ok(res);
     }
 
+    [HttpGet("{projectId}")]
+    public async Task<ActionResult<ProjectLoadResponse>> GetProject(string projectId)
+    {
+        return Ok(await _projectRepository.GetLoadedProjectAsync(projectId));
+    }
+
     [HttpPost("create")]
     public async Task<ActionResult<ProjectCreationResponse>> CreateProject()
     {
         var projectId = Guid.NewGuid().ToString("N");
 
-        var defaultScriptsRoot = Path.Combine(
-            AppContext.BaseDirectory,
-            "DefaultScripts"
-        );
+        Directory.CreateDirectory(_path.GetProjectLibrariesRoot(projectId));
+        Directory.CreateDirectory(_path.GetProjectScriptsRoot(projectId));
 
-        var scripts = await Task.WhenAll(
-    Directory.EnumerateFiles(defaultScriptsRoot, "*.cs", SearchOption.AllDirectories)
-        .Select(async file => new ScriptSource(
-            FileName: Path.GetFileName(file),
-            Source: await System.IO.File.ReadAllTextAsync(file)
-        ))
-);
-        var build = _buildService.CompileInMemory(scripts, projectId, out var assemblyBytes);
+        var build = await _buildService.FullCompileInMemory(projectId, true);
 
-
-
-        if (!build.Success)
-            return Ok(new ProjectRunResult(false, build.Error, null));
-
-        var nodesResult = await _buildService.GetNodes(
-    assemblyBytes,
-    scripts,
-    attachSourceCode: true
-);
-
+        if (!build.Result.Success)
+            return Ok(new ProjectRunResult(false, build.Result.Error, null));
 
         return Ok(new ProjectCreationResponse(
             ProjectId: projectId,
-            Nodes: nodesResult.Nodes!
+            Nodes: build.Nodes!
         ));
     }
 
-    private static void CopyDirectory(string sourceDir, string targetDir)
+    [HttpPost("save/{projectId}")]
+    public async Task<ActionResult> SaveProject(string projectId, [FromBody] SaveProjectDto request)
     {
-        Directory.CreateDirectory(targetDir);
+        var project = await _db.Projects
+            .Include(x => x.FlowNodes)
+                .ThenInclude(x => x.Properties)
+            .Include(x => x.FlowEdges)
+            .FirstOrDefaultAsync(x => x.Id == projectId);
 
-        foreach (var file in Directory.GetFiles(sourceDir))
+        if (project is null)
         {
-            var dest = Path.Combine(targetDir, Path.GetFileName(file));
-            System.IO.File.Copy(file, dest, overwrite: false);
+            project = new ProjectDb
+            {
+                Id = projectId,
+                CreatedAt = DateTime.UtcNow,
+            };
+
+            _db.Projects.Add(project);
         }
 
-        foreach (var dir in Directory.GetDirectories(sourceDir))
-        {
-            var dest = Path.Combine(targetDir, Path.GetFileName(dir));
-            CopyDirectory(dir, dest);
-        }
-    }
-
-
-    [HttpPost("send/{projectId}")]
-    public async Task<ActionResult> SendProject(string projectId, [FromBody] ProjectFile[] libraries)
-    {
-        var root = Path.Combine(
-            _env.ContentRootPath,
-            "wwwroot",
-            "projects",
-            projectId,
-            "Scripts"
-        );
+        var root = _path.GetProjectScriptsRoot(projectId);
 
         if (!Directory.Exists(root))
-            return NotFound("Project not found");
+        {
+            Directory.CreateDirectory(root);
+        }
 
-        foreach (var file in libraries)
+        foreach (var file in request.Libraries)
         {
             if (string.IsNullOrWhiteSpace(file.Name))
                 continue;
 
             var safeName = Path.GetFileName(file.Name);
 
-            var filePath = Path.Combine(root, safeName);
+            var filePath = Path.Combine(root, safeName + ".cs");
 
             await System.IO.File.WriteAllTextAsync(
                 filePath,
@@ -110,36 +98,75 @@ public class ProjectController : ControllerBase
             );
         }
 
+        _db.FlowNodeProperties.RemoveRange(
+            project.FlowNodes.SelectMany(x => x.Properties)
+        );
+
+        _db.FlowNodes.RemoveRange(project.FlowNodes);
+        _db.FlowEdges.RemoveRange(project.FlowEdges);
+
+        project.FlowNodes = request.FlowNodes
+            .Select(node => new FlowNodeDb
+            {
+                Id = node.Id,
+                ProjectId = project.Id,
+                Name = node.Name,
+                Type = node.Type,
+                PositionX = node.Position.X,
+                PositionY = node.Position.Y,
+
+                Properties = node.Properties
+                    .Select(property => new FlowNodePropertyDb
+                    {
+                        FlowNodeId = node.Id,
+                        Name = property.Name,
+                        Type = property.Type,
+                        Value = property.Value,
+                    })
+                    .ToList(),
+            })
+            .ToList();
+
+        project.FlowEdges = request.FlowEdges
+            .Select(edge => new FlowNodeEdgeDb
+            {
+                Id = edge.Id,
+                ProjectId = project.Id,
+                SourceId = edge.SourceId,
+                TargetId = edge.TargetId,
+                SourceHandleId = edge.SourceHandleId,
+                TargetHandleId = edge.TargetHandleId,
+            })
+            .ToList();
+
+        await _db.SaveChangesAsync();
+
         return Ok();
     }
 
     [HttpPost("compile/{projectId}")]
     public async Task<ActionResult<ProjectRunResult>> CompileProject(string projectId)
     {
-        return Ok();
-        // var projectScriptsDir = Path.Combine(
-        //     _env.ContentRootPath,
-        //     "wwwroot",
-        //     "projects",
-        //     projectId,
-        //     "Scripts"
-        // );
+        var scripts = _path.GetProjectScriptsRoot(projectId);
+        var libraries = _path.GetProjectLibrariesRoot(projectId);
 
-        // if (!Directory.Exists(projectScriptsDir))
-        //     return NotFound("Project not found");
+        if (!Directory.Exists(libraries))
+        {
+            Directory.CreateDirectory(libraries);
+        }
 
-        // var build = await _buildService.Compile(projectScriptsDir, projectId);
+        if (!Directory.Exists(scripts))
+        {
+            return NotFound("Project not found");
+        }
 
-        // if (!build.Success)
-        //     return Ok(new ProjectRunResult(false, build.Error, null));
+        var build = await _buildService.FullCompileInMemory(projectId, true);
 
-        // var nodesResult = await _buildService.GetNodes(projectId, true);
+        if (!build.Result.Success)
+        {
+            return Ok(new ProjectRunResult(false, build.Result.Error, null));
+        }
 
-        // if (!nodesResult.Success)
-        // {
-        //     return Ok(new ProjectRunResult(false, nodesResult.Error, null));
-        // }
-
-        // return Ok(new ProjectRunResult(true, null, nodesResult.Nodes));
+        return Ok(new ProjectRunResult(true, null, build.Nodes));
     }
 }

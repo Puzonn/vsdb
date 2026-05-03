@@ -6,31 +6,42 @@
       :node-types="nodeTypes"
       fit-view
       class="bg-zinc-950"
+      @connect="handleConnect"
     />
   </div>
 </template>
 
 <script setup lang="ts">
 import { markRaw } from "vue";
-import { VueFlow, type Node, type Edge, useVueFlow } from "@vue-flow/core";
-import type { NodeComponent } from "@vue-flow/core";
+import {
+  VueFlow,
+  type Node,
+  type Edge,
+  type Connection,
+  type NodeComponent,
+} from "@vue-flow/core";
+
 import ProjectFlowNode from "./ProjectFlowNode.vue";
 
-const nodes = defineModel<Node[]>("nodes");
-const edges = defineModel<Edge[]>("edges");
+const nodes = defineModel<Node<FlowNode>[]>("nodes", {
+  default: [],
+});
+
+defineProps<{
+  edges: Edge[];
+}>();
+
+const emit = defineEmits<{
+  connect: [connection: Connection];
+}>();
 
 const nodeTypes = {
   visual: markRaw(ProjectFlowNode) as NodeComponent,
 };
 
-const { onConnect } = useVueFlow();
-
-onConnect((params) => {
-  edges.value!.push({
-    ...params,
-    id: crypto.randomUUID(),
-  });
-});
+function handleConnect(connection: Connection) {
+  emit("connect", connection);
+}
 </script>
 
 <style>

@@ -6,52 +6,67 @@ public class AppDbContext : DbContext
         : base(options) { }
 
     public DbSet<ProjectDb> Projects => Set<ProjectDb>();
-    public DbSet<ProjectNodeDb> Nodes => Set<ProjectNodeDb>();
-    public DbSet<ProjectPinDb> Pins => Set<ProjectPinDb>();
-    public DbSet<ProjectEdgeDb> Edges => Set<ProjectEdgeDb>();
+    public DbSet<FlowNodeDb> FlowNodes => Set<FlowNodeDb>();
+    public DbSet<FlowNodePropertyDb> FlowNodeProperties => Set<FlowNodePropertyDb>();
+    public DbSet<FlowNodeEdgeDb> FlowEdges => Set<FlowNodeEdgeDb>();
 
-    protected override void OnModelCreating(ModelBuilder b)
+    protected override void OnModelCreating(ModelBuilder builder)
     {
-        b.Entity<ProjectDb>()
-            .HasMany(p => p.Nodes)
-            .WithOne(n => n.Project)
-            .HasForeignKey(n => n.ProjectId)
-            .OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<ProjectDb>(entity =>
+        {
+            entity.HasKey(x => x.Id);
 
-        b.Entity<ProjectNodeDb>()
-            .HasMany(n => n.Pins)
-            .WithOne(p => p.Node)
-            .HasForeignKey(p => p.NodeId)
-            .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(x => x.FlowNodes)
+                .WithOne(x => x.Project)
+                .HasForeignKey(x => x.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-        b.Entity<ProjectDb>()
-            .HasMany(p => p.Edges)
-            .WithOne(e => e.Project)
-            .HasForeignKey(e => e.ProjectId)
-            .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(x => x.FlowEdges)
+                .WithOne(x => x.Project)
+                .HasForeignKey(x => x.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
 
-        b.Entity<ProjectEdgeDb>()
-            .HasOne(e => e.SourceNode)
-            .WithMany()
-            .HasForeignKey(e => e.SourceNodeId)
-            .OnDelete(DeleteBehavior.Restrict);
+        builder.Entity<FlowNodeDb>(entity =>
+        {
+            entity.HasKey(x => x.Id);
 
-        b.Entity<ProjectEdgeDb>()
-            .HasOne(e => e.TargetNode)
-            .WithMany()
-            .HasForeignKey(e => e.TargetNodeId)
-            .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(x => x.Name)
+                .IsRequired();
 
-        b.Entity<ProjectEdgeDb>()
-            .HasOne(e => e.SourcePin)
-            .WithMany()
-            .HasForeignKey(e => e.SourcePinId)
-            .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(x => x.Type)
+                .IsRequired();
 
-        b.Entity<ProjectEdgeDb>()
-            .HasOne(e => e.TargetPin)
-            .WithMany()
-            .HasForeignKey(e => e.TargetPinId)
-            .OnDelete(DeleteBehavior.Restrict);
+            entity.HasMany(x => x.Properties)
+                .WithOne(x => x.FlowNode)
+                .HasForeignKey(x => x.FlowNodeId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<FlowNodePropertyDb>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Name)
+                .IsRequired();
+
+            entity.Property(x => x.Type)
+                .IsRequired();
+        });
+
+        builder.Entity<FlowNodeEdgeDb>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.SourceId)
+                .IsRequired();
+
+            entity.Property(x => x.TargetId)
+                .IsRequired();
+
+            entity.HasIndex(x => x.ProjectId);
+            entity.HasIndex(x => x.SourceId);
+            entity.HasIndex(x => x.TargetId);
+        });
     }
 }

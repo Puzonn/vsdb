@@ -1,7 +1,15 @@
 interface ProjectRunResult {
   success: boolean;
   errors?: string | null;
-  nodes?: ProjectNode[] | null;
+  nodes?: ProjectNode[];
+}
+
+interface Project {
+  id: string;
+  createdAt: Date;
+  flowNodes: FlowNode[];
+  flowEdges: FlowConnection[];
+  nodes: ProjectNode[];
 }
 
 interface ProjectNode {
@@ -9,15 +17,48 @@ interface ProjectNode {
   sourceCode: string;
   outputs: NodeOutput[];
   inputs: NodeInput[];
-  nodeProperties: NodeProperty[];
+  properties: NodeProperty[];
+}
+
+interface FlowNode {
+  id: string;
+  name: string;
+  outputs: NodeOutput[];
+  inputs: NodeInput[];
+  properties: NodeProperty[];
+  connections: FlowConnection[];
+  position: { x: number; y: number };
+  onDeleteClicked: () => void;
+  onSettingsClicked: () => void;
+}
+
+interface FlowConnection {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  sourceHandleId?: string | null;
+  targetHandleId?: string | null;
+}
+
+interface NodeEditView {
+  id?: string;
+  name: string;
+  isInstance: boolean;
+  sourceCode: string;
+  outputs: NodeOutput[];
+  inputs: NodeInput[];
+  properties: NodeProperty[];
+  onPropertySave?: () => void;
 }
 
 interface NodeInput {
+  id: string;
   type: string;
   name: string;
 }
 
 interface NodeOutput {
+  id: string;
   type: string;
   name: string;
 }
@@ -25,10 +66,18 @@ interface NodeOutput {
 interface NodeProperty {
   type: string;
   name: string;
-  defaultValue?: string;
+  value: string;
 }
 
 interface ProjectCreationResponse {
   projectId: string;
   nodes?: ProjectNode[] | null;
+}
+
+interface ProjectLoadResponse {
+  id: string;
+  createdAt: Date;
+  nodes: ProjectNode[];
+  flowNodes: FlowNode[];
+  flowEdges: FlowConnection[];
 }

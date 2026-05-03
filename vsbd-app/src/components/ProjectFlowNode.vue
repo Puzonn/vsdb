@@ -1,18 +1,31 @@
 <template>
   <div
-    class="min-w-[220px] rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-100 shadow-lg"
+    class="relative min-w-[220px] rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-100 shadow-lg"
   >
+    <button
+      v-on:click="data.onDeleteClicked(data.id)"
+      class="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-zinc-800 text-zinc-400 hover:bg-opacity-50 hover:text-white transition"
+    >
+      X
+    </button>
+    <button
+      v-on:click="data.onSettingsClicked(data.id)"
+      class="absolute right-10 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-zinc-800 text-zinc-400 hover:bg-opacity-50 hover:text-white transition"
+    >
+      ⚙
+    </button>
+
     <div
-      class="px-3 py-2 font-semibold text-sm rounded-t-lg select-none"
+      class="px-3 py-2 pr-10 font-semibold text-sm rounded-t-lg select-none"
       :class="headerColor"
     >
-      {{ data.label }}
+      {{ data.name }}
     </div>
 
     <div class="relative flex p-3 text-xs">
       <div class="relative flex-1">
         <div
-          v-for="(input, index) in data.inputs"
+          v-for="(input, i) in data.inputs"
           :key="input.id"
           class="relative h-6 flex items-center"
         >
@@ -22,7 +35,7 @@
             :position="Position.Left"
             class="pin pin-input"
           />
-          <span class="ml-4">{{ input.label }}</span>
+          <span class="ml-4">{{ input.name }}</span>
         </div>
       </div>
 
@@ -32,7 +45,7 @@
           :key="output.id"
           class="relative h-6 flex items-center justify-end"
         >
-          <span class="mr-4">{{ output.label }}</span>
+          <span class="mr-4">{{ output.name }}</span>
           <Handle
             type="source"
             :id="output.id"
@@ -49,17 +62,15 @@
 import { Handle, Position } from "@vue-flow/core";
 import { computed } from "vue";
 
-type Pin = {
-  id: string;
-  label: string;
-};
-
 const props = defineProps<{
   data: {
-    label: string;
+    id: string;
+    name: string;
     category?: "event" | "logic" | "math";
-    inputs: Pin[];
-    outputs: Pin[];
+    inputs: NodeInput[];
+    outputs: NodeOutput[];
+    onDeleteClicked: (id: string) => void;
+    onSettingsClicked: (id: string) => void;
   };
 }>();
 

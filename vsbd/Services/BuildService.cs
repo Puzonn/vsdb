@@ -8,27 +8,23 @@ public class BuildService
 {
     private readonly ILogger<BuildService> _logger;
     private readonly IWebHostEnvironment _env;
+    private readonly PathService _path;
 
-    public BuildService(ILogger<BuildService> logger, IWebHostEnvironment env)
+    public BuildService(ILogger<BuildService> logger, IWebHostEnvironment env, PathService path)
     {
+        _path = path;
         _env = env;
         _logger = logger;
     }
 
-    static bool IsSigned(Assembly a)
-        => a.GetName().GetPublicKeyToken()?.Length > 0;
-
-    public async Task<BuildResult> Compile(string projectDir, string projectId)
+    public async Task<BuildResult> Compile(string scriptsDir, string librariesDir, string projectId)
     {
         var assemblyName = $"vsbd-nodes-{projectId}";
 
         var baseDir = AppContext.BaseDirectory;
-        var outDir = Path.Combine(baseDir, "Libraries", projectId);
-        Directory.CreateDirectory(outDir);
+        var dllPath = Path.Combine(librariesDir, $"{assemblyName}.dll");
 
-        var dllPath = Path.Combine(outDir, $"{assemblyName}.dll");
-
-        var csFiles = Directory.EnumerateFiles(projectDir, "*.cs", SearchOption.AllDirectories)
+        var csFiles = Directory.EnumerateFiles(scriptsDir, "*.cs", SearchOption.AllDirectories)
             .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
                      && !p.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
             .ToArray();
@@ -74,7 +70,7 @@ public class BuildService
         return new BuildResult(true, null);
     }
 
-    public BuildResult CompileInMemory(IReadOnlyList<ScriptSource> scripts, string projectId, out byte[] assemblyBytes)
+    public BuildResult CompileInMemory(IReadOnlyList<ScriptSource> scripts, string projectId, bool save, out byte[] assemblyBytes)
     {
         var assemblyName = $"vsbd-nodes-{projectId}";
         assemblyBytes = Array.Empty<byte>();
@@ -104,6 +100,7 @@ public class BuildService
         );
 
         using var ms = new MemoryStream();
+
         var result = compilation.Emit(ms);
 
         if (!result.Success)
@@ -116,7 +113,39 @@ public class BuildService
         }
 
         assemblyBytes = ms.ToArray();
+
+        if (save)
+        {
+            var dllPath = Path.Combine(_path.GetProjectLibrariesRoot(projectId), $"{assemblyName}.dll");
+
+            File.WriteAllBytes(dllPath, assemblyBytes);
+        }
+
         return new BuildResult(true, null);
+    }
+
+    public async Task<(BuildResult Result, Node[] Nodes)> FullCompileInMemory(string projectId, bool attachSourceCode)
+    {
+        var scripts = await Task.WhenAll(
+            Directory.EnumerateFiles(_path.GetScriptsRoot(), "*.cs", SearchOption.AllDirectories)
+                .Select(async file => new ScriptSource(
+                    FileName: Path.GetFileName(file),
+                    Source: await File.ReadAllTextAsync(file)
+                ))
+        );
+
+        var build = CompileInMemory(scripts, projectId, true, out var assemblyBytes);
+
+        if (!build.Success)
+            return (build, []);
+
+        var nodesResult = await GetNodes(
+            assemblyBytes,
+            scripts,
+            attachSourceCode: attachSourceCode
+        );
+
+        return (build, nodesResult.Nodes);
     }
 
     public async Task<NodeResult> GetNodes(
@@ -142,12 +171,12 @@ public class BuildService
             {
                 var inputs = type
                     .GetCustomAttributes<NodeInputAttribute>(false)
-                    .Select(a => new NodeInput(a.Type.FullName!, a.Name))
+                    .Select(a => new NodeInput($"input:{a.Name}", a.Type.FullName!, a.Name))
                     .ToArray();
 
                 var outputs = type
                     .GetCustomAttributes<NodeOutputAttribute>(false)
-                    .Select(a => new NodeOutput(a.Type.FullName!, a.Name))
+                    .Select(a => new NodeOutput($"output:{a.Name}", a.Type.FullName!, a.Name))
                     .ToArray();
 
                 var properties = type
@@ -157,7 +186,7 @@ public class BuildService
                     .Select(x => new NodeProperty(
                         x.Prop.PropertyType.FullName ?? "?",
                         x.Prop.Name,
-                        x.Attr!.DefaultValue?.ToString()
+                        x.Attr?.DefaultValue?.ToString() ?? "?"
                     ))
                     .ToArray();
 

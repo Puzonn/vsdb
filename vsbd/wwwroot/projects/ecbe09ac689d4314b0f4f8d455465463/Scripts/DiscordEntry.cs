@@ -28,13 +28,13 @@ public sealed class DiscordEntry : NodeDiscordClient, IEventSourceNode
         
         Client.MessageCreate += async e =>
         {
-            // Task ReplyAsync(string reply, CancellationToken t) => e.ReplyAsync(reply, null, t);
-            // var messageCreatedEvent = new MessageCreatedEvent(e.Content, e.Author.Username, e.Author.IsBot, ReplyAsync);
+            Task ReplyAsync(string reply, CancellationToken t) => e.ReplyAsync(reply, null, t);
+            var messageCreatedEvent = new MessageCreatedEvent(e.Content, e.Author.Username, e.Author.IsBot, ReplyAsync);
 
-            // dispatcher.Emit(new Seed(Context.NodeId, new(StringComparer.OrdinalIgnoreCase)
-            // {
-            //     ["OnMessageCreate"] = messageCreatedEvent
-            // }));
+            dispatcher.Emit(new Seed(Context.NodeId, new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["OnMessageCreate"] = messageCreatedEvent
+            }));
         };
     }
 }

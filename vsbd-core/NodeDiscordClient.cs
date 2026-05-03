@@ -27,4 +27,9 @@ public class NodeDiscordClient : NodeBase
 
         return ValueTask.CompletedTask;
     }
+
+    public override void OnNodeCreate()
+    {
+        Context.Logger.LogTrace("Node Created");
+    }
 }

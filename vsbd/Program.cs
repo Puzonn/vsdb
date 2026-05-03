@@ -20,9 +20,16 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 );
 
 builder.Services.AddLogging();
+builder.Services.AddSingleton<PathService>();
+builder.Services.AddScoped<SharedLibraryService>();
 builder.Services.AddScoped<BuildService>();
+builder.Services.AddScoped<BuildService>();
+builder.Services.AddScoped<ProjectRepository>();
+builder.Services.AddScoped<IFlowJobManager, FlowJobManager>();
+builder.Services.AddScoped<NodeFactory>();
 
 builder.Services.AddSignalR();
+
 
 var app = builder.Build();
 

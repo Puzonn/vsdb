@@ -8,7 +8,7 @@
       <button
         @click="onNodeClick(node)"
         :class="
-          selectedNode === node
+          selectedNode?.name === node.name
             ? 'bg-zinc-800 border-l-4 border-white'
             : 'bg-zinc-900 border-zinc-900'
         "
@@ -23,7 +23,7 @@
 <script setup lang="ts">
 defineProps<{
   nodes: ProjectNode[];
-  selectedNode: ProjectNode | undefined;
+  selectedNode: NodeEditView | undefined;
   onNodeClick: (node: ProjectNode) => void;
 }>();
 </script>

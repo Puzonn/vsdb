@@ -37,33 +37,59 @@
     <div>
       <h2 class="text-sm font-semibold text-zinc-300 mb-2">Properties</h2>
 
-      <div
-        v-for="(prop, i) in node.nodeProperties"
-        :key="`prop-${i}`"
-        class="flex flex-col gap-1 py-2 border-b border-zinc-800"
-      >
-        <div class="flex justify-between text-sm text-zinc-400">
-          <span>{{ prop.name }}</span>
-          <span class="text-zinc-500">{{ prop.type }}</span>
+      <template v-if="node.isInstance">
+        <div
+          v-for="(property, i) in node.properties"
+          :key="`property-input-${i}`"
+          class="mb-3"
+        >
+          <label class="mb-1 block text-xs text-zinc-500">
+            {{ property.name }}
+            <span class="text-zinc-600">({{ property.type }})</span>
+          </label>
+
+          <input
+            v-model="property.value"
+            class="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+            :placeholder="property.name"
+            :value="property.value"
+          />
         </div>
 
-        <input
-          v-if="prop.defaultValue !== undefined"
-          v-model="prop.defaultValue"
-          class="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-sm text-zinc-200"
-          placeholder="Default value"
-        />
-      </div>
+        <p v-if="!node.properties.length" class="text-xs text-zinc-600 italic">
+          No properties
+        </p>
 
-      <p v-if="node.nodeProperties.length" class="text-xs text-zinc-600 italic">
-        No properties
-      </p>
+        <button
+          class="mt-4 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-500 active:scale-95 transition"
+          @click="onPropertySave(node.properties, node.id!)"
+        >
+          Save
+        </button>
+      </template>
+
+      <template v-else>
+        <div
+          v-for="(property, i) in node.properties"
+          :key="`property-${i}`"
+          class="flex justify-between text-sm text-zinc-400 py-1 border-b border-zinc-800"
+        >
+          <span>{{ property.name }}</span>
+          <span class="text-zinc-500">{{ property.type }}</span>
+        </div>
+
+        <p v-if="!node.properties.length" class="text-xs text-zinc-600 italic">
+          No properties
+        </p>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-defineProps<{
-  node: ProjectNode;
+const props = defineProps<{
+  node: NodeEditView;
+  isInstance: boolean;
+  onPropertySave: (properties: NodeProperty[], id: string) => void;
 }>();
 </script>

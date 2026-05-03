@@ -1,6 +1,9 @@
-public class ProjectDb
+public sealed class ProjectDb
 {
-    public Guid Id { get; set; }
-    public List<ProjectNodeDb> Nodes { get; set; } = [];
-    public List<ProjectEdgeDb> Edges { get; set; } = [];
+    public required string Id { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public List<FlowNodeDb> FlowNodes { get; set; } = [];
+    public List<FlowNodeEdgeDb> FlowEdges { get; set; } = [];
 }
